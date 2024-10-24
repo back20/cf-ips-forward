@@ -728,18 +728,23 @@ func startForwarding(datacenter string, rule *ForwardRule, forwardingRules map[s
 }
 
 
+func setBestTarget(rule *ForwardRule, forwardingRules map[string]*ForwardRule, forwardingRulesMutex *sync.RWMutex, bestTarget *Target) {
+    rule.mu.Lock()
+    forwardingRulesMutex.Lock()
+    rule.bestTarget = bestTarget
+    forwardingRules[rule.bestTarget.Datacenter] = rule
+    forwardingRulesMutex.Unlock()
+    rule.mu.Unlock()
+}
+
+
 func updateBestTarget(rule *ForwardRule, forwardingRules map[string]*ForwardRule, forwardingRulesMutex *sync.RWMutex) {
     ticker := time.NewTicker(1 * time.Minute)
     defer ticker.Stop()
 
     for {
         bestTarget := selectTarget(rule.Targets)
-        rule.mu.Lock()
-        forwardingRulesMutex.Lock()
-        rule.bestTarget = &bestTarget
-        forwardingRules[rule.bestTarget.Datacenter] = rule
-        forwardingRulesMutex.Unlock()
-        rule.mu.Unlock()
+        setBestTarget(rule, forwardingRules, forwardingRulesMutex, &bestTarget) // 使用 setBestTarget 函数
         <-ticker.C
     }
 }
