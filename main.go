@@ -704,10 +704,10 @@ func readRulesFromCSV(filename string, locations []location) (map[string]*Forwar
 }
 
 func startForwarding(datacenter string, rule *ForwardRule, forwardingRules map[string]*ForwardRule) {
-    forwardingRulesMutex := sync.RWMutex{} // 定义 forwardingRulesMutex
-    go updateBestTarget(rule, forwardingRules, &forwardingRulesMutex) // 删除 datacenter 参数
+    forwardingRulesMutex := sync.RWMutex{}
+    go updateBestTarget(rule, forwardingRules, &forwardingRulesMutex)
 
-    listener, err := net.Listen("tcp", fmt.Sprintf(":%d", rule.SourcePort))
+    listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", rule.SourcePort))
     if err != nil {
         log.Printf("Error listening on port %d for %s: %v", rule.SourcePort, datacenter, err)
         return
