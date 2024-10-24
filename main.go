@@ -704,7 +704,8 @@ func readRulesFromCSV(filename string, locations []location) (map[string]*Forwar
 }
 
 func startForwarding(datacenter string, rule *ForwardRule, forwardingRules map[string]*ForwardRule) {
-    go updateBestTarget(rule, forwardingRules) // 传递 forwardingRules
+    forwardingRulesMutex := sync.RWMutex{} // 定义 forwardingRulesMutex
+    go updateBestTarget(rule, forwardingRules, &forwardingRulesMutex) // 删除 datacenter 参数
 
     listener, err := net.Listen("tcp", fmt.Sprintf(":%d", rule.SourcePort))
     if err != nil {
@@ -726,19 +727,21 @@ func startForwarding(datacenter string, rule *ForwardRule, forwardingRules map[s
     }
 }
 
-func updateBestTarget(rule *ForwardRule, forwardingRules map[string]*ForwardRule) {
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
 
-	for {
-		bestTarget := selectTarget(rule.Targets)
-		rule.mu.Lock() // 获取锁
-		rule.bestTarget = &bestTarget
-		forwardingRules[rule.bestTarget.Datacenter] = rule // 更新 forwardingRules
-		rule.mu.Unlock()                                  // 释放锁
+func updateBestTarget(rule *ForwardRule, forwardingRules map[string]*ForwardRule, forwardingRulesMutex *sync.RWMutex) {
+    ticker := time.NewTicker(1 * time.Minute)
+    defer ticker.Stop()
 
-		<-ticker.C
-	}
+    for {
+        bestTarget := selectTarget(rule.Targets)
+        rule.mu.Lock()
+        forwardingRulesMutex.Lock()
+        rule.bestTarget = &bestTarget
+        forwardingRules[rule.bestTarget.Datacenter] = rule
+        forwardingRulesMutex.Unlock()
+        rule.mu.Unlock()
+        <-ticker.C
+    }
 }
 
 func measureLatency(ip string, port int) time.Duration {
@@ -768,17 +771,17 @@ func selectTarget(targets []Target) Target {
 
 
 func handleConnection(source net.Conn, rule *ForwardRule) {
-	defer source.Close()
-    
-	// 每次处理连接时都获取最新的最佳目标
-	rule.mu.RLock() // 获取读锁
-	target := rule.bestTarget
-	rule.mu.RUnlock() // 释放读锁
+    defer source.Close()
 
-	if target == nil {
-		log.Printf("No available target")
-		return
-	}
+    // 每次处理连接时都获取最新的最佳目标
+    rule.mu.RLock()
+    target := rule.bestTarget
+    rule.mu.RUnlock()
+
+    if target == nil {
+        log.Printf("No available target")
+        return
+    }
 
     // 使用 net.JoinHostPort() 构建目标地址
     targetAddress := net.JoinHostPort(target.IP, strconv.Itoa(target.Port))
