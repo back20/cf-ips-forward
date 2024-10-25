@@ -235,7 +235,7 @@ func readIPs(File string, testAllIPs bool, ips int) (map[ipPort][]int, error) {
 
 						// 生成随机数并填充到地址中
 						for i := ones / 8; i < net.IPv6len; i++ {
-							randIP[i] = byte(rand.Intn(256))
+							randIP[i] = byte(rand.Intn(65536))
 						}
 
 						if ipNet.Contains(randIP) {
@@ -852,8 +852,30 @@ func displayMonitoringPanel() {
 			}
 		}
 
-		fmt.Println("                               代理信息")
+		// 获取本机 IP 地址，用于显示代理地址
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			log.Printf("Failed to get local IP addresses: %v", err)
+		}
+		var proxyAddress string
+		for _, address := range addrs {
+			// 检查 ip 地址判断是否回环地址
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					proxyAddress = ipnet.IP.String()
+					break
+				}
+			}
+		}
+
+		// 使用 ANSI 转义码为标题添加颜色和加粗效果
+		titleColor := "\033[1;92m" // 亮绿色，加粗
+		resetColor := "\033[0m"
+
+		// 在标题中显示代理地址
+		fmt.Printf("地址: %s%s%s\n", titleColor, proxyAddress, resetColor)
 		fmt.Println("----------------------------------------------------------------------")
+
 		for _, rule := range rules { // 遍历所有转发规则
 			if rule.bestTarget != nil { // 如果最佳目标存在
 				loc, ok := locationMap[rule.bestTarget.Datacenter]
@@ -865,8 +887,22 @@ func displayMonitoringPanel() {
 					}
 					cityPaddingStr := strings.Repeat(" ", cityPadding)
 
-					// 使用 %s 格式化字符串输出 IP 地址
-					fmt.Printf("数据中心:%s 代理端口:%d 城市:%s%s IP:%s 端口: %d\n", rule.bestTarget.Datacenter, rule.SourcePort, loc.City, cityPaddingStr, rule.bestTarget.IP, rule.bestTarget.Port)
+					// 使用 ANSI 转义码为数据中心名称添加颜色
+					datacenterColor := "\033[32m" // 绿色
+					// 使用 ANSI 转义码为城市名称添加颜色
+					cityColor := "\033[34m" // 蓝色
+					// 使用 ANSI 转义码为 IP 地址添加颜色
+					ipColor := "\033[33m" // 黄色
+					// 使用 ANSI 转义码为代理端口号添加颜色和加粗效果
+					portColor := "\033[1;36m" // 青色，加粗
+					// 使用 ANSI 转义码重置颜色
+					// 使用 %s 格式化字符串输出 IP 地址, 并添加 cityPaddingStr 变量和代理端口号颜色/加粗
+					fmt.Printf("数据中心: %s%s%s 代理端口: %s%d%s 城市: %s%s%s%s IP: %s%s%s 端口: %d\n",
+						datacenterColor, rule.bestTarget.Datacenter, resetColor,
+						portColor, rule.SourcePort, resetColor,
+						cityColor, loc.City, cityPaddingStr, resetColor,
+						ipColor, rule.bestTarget.IP, resetColor,
+						rule.bestTarget.Port)
 				} else {
 					// 计算城市名后面的空格数
 					cityPadding := maxCityLength - len("未知")
@@ -875,8 +911,24 @@ func displayMonitoringPanel() {
 					}
 					cityPaddingStr := strings.Repeat(" ", cityPadding)
 
-					// 使用 %s 格式化字符串输出 IP 地址
-					fmt.Printf("数据中心:%s 代理端口:%d 城市:未知%s IP:%s 端口: %d\n", rule.bestTarget.Datacenter, rule.SourcePort, cityPaddingStr, rule.bestTarget.IP, rule.bestTarget.Port)
+					// 使用 ANSI 转义码为数据中心名称添加颜色
+					datacenterColor := "\033[32m" // 绿色
+					// 使用 ANSI 转义码为城市名称添加颜色
+					cityColor := "\033[34m" // 蓝色
+					// 使用 ANSI 转义码为 IP 地址添加颜色
+					ipColor := "\033[33m" // 黄色
+					// 使用 ANSI 转义码为代理端口号添加颜色和加粗效果
+					portColor := "\033[1;36m" // 青色，加粗
+					// 使用 ANSI 转义码重置颜色
+					resetColor := "\033[0m"
+
+					// 使用 %s 格式化字符串输出 IP 地址, 并添加 cityPaddingStr 变量和代理端口号颜色/加粗
+					fmt.Printf("数据中心: %s%s%s 代理端口: %s%d%s 城市: %s未知%s%s IP: %s%s%s 端口: %d\n",
+						datacenterColor, rule.bestTarget.Datacenter, resetColor,
+						portColor, rule.SourcePort, resetColor,
+						cityColor, cityPaddingStr, resetColor,
+						ipColor, rule.bestTarget.IP, resetColor,
+						rule.bestTarget.Port)
 				}
 			}
 		}
@@ -889,7 +941,7 @@ func displayMonitoringPanel() {
 		currentTime := time.Now().Format("2006-01-02 15:04:05")
 
 		fmt.Println("----------------------------------------------------------------------")
-		fmt.Printf("运行时长:%s\t\t当前时间:%s\n", elapsedStr, currentTime)
+		fmt.Printf("运行时长: %s\t\t当前时间: %s\n", elapsedStr, currentTime)
 		fmt.Println("----------------------------------------------------------------------")
 	}
 }
