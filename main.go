@@ -791,22 +791,32 @@ func handleConnection(source net.Conn, rule *ForwardRule) {
     // 使用 net.JoinHostPort() 构建目标地址
     targetAddress := net.JoinHostPort(target.IP, strconv.Itoa(target.Port))
 
-    destination, err := net.Dial("tcp", targetAddress)
+    // 设置连接超时时间为 5 秒
+    destination, err := net.DialTimeout("tcp", targetAddress, 5*time.Second)
     if err != nil {
         log.Printf("Error connecting to target %s: %v", targetAddress, err)
         return
     }
-    defer destination.Close()
+    defer destination.Close() // 确保目标连接也关闭
+
+    // 设置读写超时时间为 10 秒
+    source.SetReadDeadline(time.Now().Add(10 * time.Second))
+    source.SetWriteDeadline(time.Now().Add(10 * time.Second))
+    destination.SetReadDeadline(time.Now().Add(10 * time.Second))
+    destination.SetWriteDeadline(time.Now().Add(10 * time.Second))
+
+    // 使用 32KB 的缓冲区
+    buf := make([]byte, 32*1024)
 
     // 使用 io.Copy 进行双向数据传输
     go func() {
-        _, err := io.Copy(destination, source)
+        _, err := io.CopyBuffer(destination, source, buf)
         if err != nil {
             log.Printf("Error copying data from source to target: %v", err)
         }
     }()
 
-    _, err = io.Copy(source, destination)
+    _, err = io.CopyBuffer(source, destination, buf)
     if err != nil {
         log.Printf("Error copying data from target to source: %v", err)
     }
