@@ -839,19 +839,6 @@ func displayMonitoringPanel() {
 			return rules[i].SourcePort < rules[j].SourcePort
 		})
 
-		// 找到城市名称的最大长度
-		maxCityLength := 0
-		for _, rule := range rules {
-			if rule.bestTarget != nil {
-				loc, ok := locationMap[rule.bestTarget.Datacenter]
-				if ok {
-					if len(loc.City) > maxCityLength {
-						maxCityLength = len(loc.City)
-					}
-				}
-			}
-		}
-
 		// 获取本机 IP 地址，用于显示代理地址
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
@@ -876,59 +863,81 @@ func displayMonitoringPanel() {
 		fmt.Printf("地址: %s%s%s\n", titleColor, proxyAddress, resetColor)
 		fmt.Println("----------------------------------------------------------------------")
 
+		// 输出表头，使用固定宽度和左对齐
+		fmt.Printf("%-4s %-6s %-12s %-10s  %-2s\n", "数据中心", "代理端口", "城市", "IP地址", "端口")
+		fmt.Println("----------------------------------------------------------------------")
+
+		maxDatacenterWidth := 4 // 数据中心最大宽度
+		maxSourcePortWidth := 6 // 代理端口最大宽度
+		maxCityWidth := 12      // 城市最大宽度
+		maxIPWidth := 15        // IP 地址最大宽度
+		maxTargetPortWidth := 5 // 端口最大宽度
+
 		for _, rule := range rules { // 遍历所有转发规则
 			if rule.bestTarget != nil { // 如果最佳目标存在
 				loc, ok := locationMap[rule.bestTarget.Datacenter]
 				if ok {
-					// 计算城市名后面的空格数
-					cityPadding := maxCityLength - len(loc.City)
-					if cityPadding < 0 {
-						cityPadding = 0
+					// 截断数据并添加省略号
+					datacenter := rule.bestTarget.Datacenter
+					if len(datacenter) > maxDatacenterWidth {
+						datacenter = datacenter[:maxDatacenterWidth-1] + "…" // 减 1 为省略号留出空间
 					}
-					cityPaddingStr := strings.Repeat(" ", cityPadding)
 
-					// 使用 ANSI 转义码为数据中心名称添加颜色
-					datacenterColor := "\033[32m" // 绿色
-					// 使用 ANSI 转义码为城市名称添加颜色
-					cityColor := "\033[34m" // 蓝色
-					// 使用 ANSI 转义码为 IP 地址添加颜色
-					ipColor := "\033[33m" // 黄色
-					// 使用 ANSI 转义码为代理端口号添加颜色和加粗效果
-					portColor := "\033[1;36m" // 青色，加粗
-					// 使用 ANSI 转义码重置颜色
-					// 使用 %s 格式化字符串输出 IP 地址, 并添加 cityPaddingStr 变量和代理端口号颜色/加粗
-					fmt.Printf("数据中心: %s%s%s 代理端口: %s%d%s 城市: %s%s%s%s IP: %s%s%s 端口: %d\n",
-						datacenterColor, rule.bestTarget.Datacenter, resetColor,
-						portColor, rule.SourcePort, resetColor,
-						cityColor, loc.City, cityPaddingStr, resetColor,
-						ipColor, rule.bestTarget.IP, resetColor,
-						rule.bestTarget.Port)
+					sourcePortStr := strconv.Itoa(rule.SourcePort)
+					if len(sourcePortStr) > maxSourcePortWidth {
+						sourcePortStr = sourcePortStr[:maxSourcePortWidth-1] + "…"
+					}
+
+					city := loc.City
+					if len(city) > maxCityWidth {
+						city = city[:maxCityWidth-1] + "…"
+					}
+
+					ip := rule.bestTarget.IP
+					if len(ip) > maxIPWidth {
+						ip = ip[:maxIPWidth-1] + "…"
+					}
+
+					targetPortStr := strconv.Itoa(rule.bestTarget.Port)
+					if len(targetPortStr) > maxTargetPortWidth {
+						targetPortStr = targetPortStr[:maxTargetPortWidth-1] + "…"
+					}
+
+					// 使用固定宽度和左对齐输出每一行
+					fmt.Printf("  %-6s  %-6s  %-12s %-16s  %-5s\n",
+						datacenter,
+						sourcePortStr,
+						city,
+						ip,
+						targetPortStr)
 				} else {
-					// 计算城市名后面的空格数
-					cityPadding := maxCityLength - len("未知")
-					if cityPadding < 0 {
-						cityPadding = 0
+					// 使用固定宽度和左对齐输出每一行，城市显示为“未知”, 并截断数据
+					datacenter := rule.bestTarget.Datacenter
+					if len(datacenter) > maxDatacenterWidth {
+						datacenter = datacenter[:maxDatacenterWidth-1] + "…"
 					}
-					cityPaddingStr := strings.Repeat(" ", cityPadding)
 
-					// 使用 ANSI 转义码为数据中心名称添加颜色
-					datacenterColor := "\033[32m" // 绿色
-					// 使用 ANSI 转义码为城市名称添加颜色
-					cityColor := "\033[34m" // 蓝色
-					// 使用 ANSI 转义码为 IP 地址添加颜色
-					ipColor := "\033[33m" // 黄色
-					// 使用 ANSI 转义码为代理端口号添加颜色和加粗效果
-					portColor := "\033[1;36m" // 青色，加粗
-					// 使用 ANSI 转义码重置颜色
-					resetColor := "\033[0m"
+					sourcePortStr := strconv.Itoa(rule.SourcePort)
+					if len(sourcePortStr) > maxSourcePortWidth {
+						sourcePortStr = sourcePortStr[:maxSourcePortWidth-1] + "…"
+					}
 
-					// 使用 %s 格式化字符串输出 IP 地址, 并添加 cityPaddingStr 变量和代理端口号颜色/加粗
-					fmt.Printf("数据中心: %s%s%s 代理端口: %s%d%s 城市: %s未知%s%s IP: %s%s%s 端口: %d\n",
-						datacenterColor, rule.bestTarget.Datacenter, resetColor,
-						portColor, rule.SourcePort, resetColor,
-						cityColor, cityPaddingStr, resetColor,
-						ipColor, rule.bestTarget.IP, resetColor,
-						rule.bestTarget.Port)
+					ip := rule.bestTarget.IP
+					if len(ip) > maxIPWidth {
+						ip = ip[:maxIPWidth-1] + "…"
+					}
+
+					targetPortStr := strconv.Itoa(rule.bestTarget.Port)
+					if len(targetPortStr) > maxTargetPortWidth {
+						targetPortStr = targetPortStr[:maxTargetPortWidth-1] + "…"
+					}
+
+					fmt.Printf("  %-6s  %-6s  %-12s %-16s  %-5s\n",
+						datacenter,
+						sourcePortStr,
+						"未知",
+						ip,
+						targetPortStr)
 				}
 			}
 		}
