@@ -2,6 +2,22 @@
 
 **Go-IPs-Forward** 是一款使用 Golang 编写的强大工具，用于测试 Cloudflare CDN 的 IP 地址延迟，并根据测速结果自动选择最佳 IP，为每个 Cloudflare 数据中心启动本地代理，将流量转发到最佳 IP。
 
+
+ip.txt 来源于使用https://github.com/cmliu/CFnat-Windows-GUI中的生成ip缓存的缓存信息
+
+生成addapi.txt用于记录成优选文件,
+  内容由生成的记录TIA,ALG,AAE,ORN,LAD,EZE,COR,NQN,EVN,ADL,BNE,CBR,HBA,MEL,PER,SYD,VIE,LLK,GYD,BAH,CGP,DAC,JSR,BGI,MSQ,BRU,PBH,LPB,GBE,QWJ,ARU,BEL,CNF,BNU,BSB,CFC,VCP,CAW,XAP,CGB,CWB,FLN,FOR,GYN,ITJ,JOI,JDO,MAO,PMW,POA,REC,RAO,GIG,SSA,SJP,SJK,GRU,SOD,NVT,UDI,VIX,BWN,SOF,OUA,PNH,YYC,YVR,YWG,YHZ,YOW,YYZ,YUL,YXE,ARI,SCL,BAQ,BOG,MDE,FIH,SJO,ABJ,ASK,ZAG,LCA,PRG,CPH,JIB,STI,SDQ,GYE,UIO,CAI,TLL,SUV,HEL,BOD,LYS,MRS,CDG,PPT,TBS,TXL,DUS,FRA,HAM,MUC,STR,ACC,ATH,SKG,GND,GUM,GUA,GEO,TGU,HKG,BUD,KEF,AMD,BLR,BBI,IXC,MAA,HYD,CNN,KNU,COK,CCU,BOM,NAG,DEL,PAT,DPS,CGK,JOG,BGW,BSR,EBL,NJF,XNH,ISU,ORK,DUB,HFA,TLV,MXP,PMO,FCO,KIN,FUK,OKA,KIX,NRT,AMM,AKX,ALA,NQZ,MBA,NBO,ICN,KWI,VTE,RIX,BEY,VNO,LUX,MFM,TNR,JHB,KUL,KCH,MLE,MRU,GDL,MEX,QRO,KIV,ULN,MPM,MDL,RGN,WDH,KTM,AMS,NOU,AKL,CHC,LOS,SKP,OSL,MCT,ISB,KHI,LHE,ZDM,PTY,ASU,LIM,CGY,CEB,MNL,CRK,WAW,LIS,SJU,DOH,RUN,OTP,KJA,DME,LED,KLD,SVX,KGL,DMM,JED,RUH,DKR,BEG,SIN,BTS,CPT,DUR,JNB,BCN,MAD,CMB,PBM,GOT,ARN,GVA,ZRH,KHH,TPE,DAR,BKK,CNX,URT,POS,TUN,IST,ADB,EBB,KBP,DXB,EDI,LHR,MAN,MGM,ANC,PHX,LAX,SMF,SAN,SFO,SJC,DEN,JAX,MIA,TLH,TPA,ATL,HNL,ORD,IND,BGR,BOS,DTW,MSP,MCI,STL,OMA,LAS,EWR,ABQ,BUF,CLT,RDU,CLE,CMH,OKC,PDX,PHL,PIT,FSD,MEM,BNA,AUS,DFW,IAH,MFE,SAT,SLC,IAD,ORF,RIC,SEA,TAS,DAD,HAN,SGN,HRE中的记录进行生成,然后再和
+  https://addressesapi.090227.xyz/ct
+  https://addressesapi.090227.xyz/cmcc
+  https://addressesapi.090227.xyz/cmcc-ipv6
+  https://ipdb.api.030101.xyz/?type=bestproxy&country=true
+  https://ipdb.api.030101.xyz/?type=bestcf&country=true
+  https://addressesapi.090227.xyz/CloudFlareYes
+  https://addressesapi.090227.xyz/ip.164746.xyz
+
+  中的优选ip记录合并一起生成.
+
+
 **功能特性:**
 
 - **批量 IP 测速:** 支持从文件读取多个 IP 地址和端口，并使用 Cloudflare 的 speed.cloudflare.com/cdn-cgi/trace 接口进行测速。
@@ -44,7 +60,7 @@
     **参数说明:**
     - `-file`: IP 列表文件名称 (默认为 ip.txt)。
     - `-outfile`: 输出文件名称 (默认为 result.csv)。
-    -  `-port`: 默认端口 (默认为 443)。
+    - `-port`: 默认端口 (默认为 443)。
     - `-max`: 并发请求最大协程数 (默认为 100)。
     - `-tls`: 是否启用 TLS (默认为 true)。
     - `-allip`: 是否测试所有 IP (ipv4网段内所有ip,ipv6依然为默认数量随机) (默认为 false)。

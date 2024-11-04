@@ -20,7 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -31,6 +30,7 @@ const (
 	basePort    = 10000                                // 端口号基数
 )
 
+// SJC,IAD,LHR,HKG,LAX,MAN,NRT,KHH,SEA,FRA,MAD,BKK,BOM,CPT,DFW,DME,HKG,ICN,KUL,LHR,NRT,PER,RUH,SIN,TPA,TPE,YUL,YYZ
 var (
 	File           = flag.String("file", "ip.txt", "IP地址及端口文件名称")                       // IP地址及端口文件名称
 	outFile        = flag.String("outfile", "result.csv", "输出文件名称")                     // 输出文件名称
@@ -41,9 +41,9 @@ var (
 	ips            = flag.Int("ips", 5, "每个IP段随机生成的IP数量(默认5)")                          //每个IP段随机测试IP数
 	pingOnly       = flag.Bool("ping", false, "仅测试延迟，不进行转发")                            // 仅测试延迟
 	maxLatency     = flag.Int("ms", 300, "指定测速最大延迟(ms), 默认300")                         // 新增变量
-	colo           = flag.String("colo", "", "指定数据中心(多个用逗号分隔,例如:sjc,hkg)")              // 新增变量
-	topDD          = flag.Int("dd", 20, "每个数据中心输出延迟最低的IP数量(默认20)")                      // 新增变量
-	updateInterval = flag.Int("min", 20, "更新间隔（分钟），默认为 20 分钟")                          // 新增更新间隔变量
+	colo           = flag.String("colo", "TIA,ALG,AAE,ORN,LAD,EZE,COR,NQN,EVN,ADL,BNE,CBR,HBA,MEL,PER,SYD,VIE,LLK,GYD,BAH,CGP,DAC,JSR,BGI,MSQ,BRU,PBH,LPB,GBE,QWJ,ARU,BEL,CNF,BNU,BSB,CFC,VCP,CAW,XAP,CGB,CWB,FLN,FOR,GYN,ITJ,JOI,JDO,MAO,PMW,POA,REC,RAO,GIG,SSA,SJP,SJK,GRU,SOD,NVT,UDI,VIX,BWN,SOF,OUA,PNH,YYC,YVR,YWG,YHZ,YOW,YYZ,YUL,YXE,ARI,SCL,BAQ,BOG,MDE,FIH,SJO,ABJ,ASK,ZAG,LCA,PRG,CPH,JIB,STI,SDQ,GYE,UIO,CAI,TLL,SUV,HEL,BOD,LYS,MRS,CDG,PPT,TBS,TXL,DUS,FRA,HAM,MUC,STR,ACC,ATH,SKG,GND,GUM,GUA,GEO,TGU,HKG,BUD,KEF,AMD,BLR,BBI,IXC,MAA,HYD,CNN,KNU,COK,CCU,BOM,NAG,DEL,PAT,DPS,CGK,JOG,BGW,BSR,EBL,NJF,XNH,ISU,ORK,DUB,HFA,TLV,MXP,PMO,FCO,KIN,FUK,OKA,KIX,NRT,AMM,AKX,ALA,NQZ,MBA,NBO,ICN,KWI,VTE,RIX,BEY,VNO,LUX,MFM,TNR,JHB,KUL,KCH,MLE,MRU,GDL,MEX,QRO,KIV,ULN,MPM,MDL,RGN,WDH,KTM,AMS,NOU,AKL,CHC,LOS,SKP,OSL,MCT,ISB,KHI,LHE,ZDM,PTY,ASU,LIM,CGY,CEB,MNL,CRK,WAW,LIS,SJU,DOH,RUN,OTP,KJA,DME,LED,KLD,SVX,KGL,DMM,JED,RUH,DKR,BEG,SIN,BTS,CPT,DUR,JNB,BCN,MAD,CMB,PBM,GOT,ARN,GVA,ZRH,KHH,TPE,DAR,BKK,CNX,URT,POS,TUN,IST,ADB,EBB,KBP,DXB,EDI,LHR,MAN,MGM,ANC,PHX,LAX,SMF,SAN,SFO,SJC,DEN,JAX,MIA,TLH,TPA,ATL,HNL,ORD,IND,BGR,BOS,DTW,MSP,MCI,STL,OMA,LAS,EWR,ABQ,BUF,CLT,RDU,CLE,CMH,OKC,PDX,PHL,PIT,FSD,MEM,BNA,AUS,DFW,IAH,MFE,SAT,SLC,IAD,ORF,RIC,SEA,TAS,DAD,HAN,SGN,HRE", "指定数据中心(多个用逗号分隔,例如:sjc,hkg)")
+	topDD          = flag.Int("dd", 20, "每个数据中心输出延迟最低的IP数量(默认20)") // 新增变量
+	updateInterval = flag.Int("min", 60, "更新间隔（分钟），默认为 20 分钟")     // 新增更新间隔变量
 )
 
 var locationMap map[string]location // 在全局声明 locationMap
@@ -78,7 +78,6 @@ type ForwardRule struct {
 	Targets    []Target
 	mu         sync.RWMutex
 	bestTarget *Target
-	Traffic    int64 // 用于存储该数据中心的累计流量
 }
 
 type Target struct {
@@ -458,7 +457,12 @@ func runSpeedTestAndSaveResults(outFile string) {
 	for res := range resultChan {
 		results = append(results, res)
 	}
+
 	saveResultsToFile(results, outFile)
+
+	// 保存结果到txt文件
+	saveResultsToTextApi(results, "addapi.txt")
+
 	fmt.Println("测速完成，结果已保存到", outFile)
 }
 
@@ -581,6 +585,57 @@ func main() {
 	}()
 
 	select {}
+}
+
+// 保存结果到文件的函数
+func saveResultsToTextApi(results []result, outFile string) {
+	file, err := os.Create(outFile)
+	if err != nil {
+		fmt.Printf("无法创建文件: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	// writer := csv.NewWriter(file)
+	writer := bufio.NewWriter(file)
+
+	// 使用map存储每个数据中心的延迟结果，用于后续筛选
+	coloResults := make(map[string][]result)
+	for _, res := range results {
+		latency, _ := strconv.Atoi(res.latency)
+		if latency <= *maxLatency {
+			if *colo != "" {
+				coloList := strings.Split(*colo, ",")
+				if !containsIgnoreCase(coloList, res.dataCenter) {
+					continue
+				}
+			}
+			coloResults[res.dataCenter] = append(coloResults[res.dataCenter], res)
+		}
+	}
+
+	// 遍历每个数据中心的的结果，并筛选出前topDD个延迟最低的IP
+	for _, results := range coloResults {
+		sort.Slice(results, func(i, j int) bool {
+			latencyI, _ := strconv.Atoi(results[i].latency)
+			latencyJ, _ := strconv.Atoi(results[j].latency)
+			return latencyI < latencyJ
+		})
+		// 只保留前topDD个结果
+		results = results[:min(*topDD, len(results))]
+
+		for _, res := range results {
+			// writer.Write([]string{res.ip, strconv.Itoa(res.ports[0]), strconv.FormatBool(*enableTLS), res.dataCenter, res.region, res.city, res.latency})
+			t := res.ip + "#优选" + res.dataCenter + "🍀☘️ " + res.region + "-" + res.city
+			// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
+			_, err := writer.WriteString(t + "\n") // 每个 IP 地址换行
+			if err != nil {
+				log.Fatalf("Failed to write IP to file: %v", err)
+			}
+		}
+	}
+
+	writer.Flush()
 }
 
 // 保存结果到文件的函数
@@ -789,14 +844,6 @@ func handleConnection(source net.Conn, rule *ForwardRule) {
 	destination, err := net.DialTimeout("tcp", targetAddress, 5*time.Second)
 	if err != nil {
 		log.Printf("Error connecting to target %s: %v", targetAddress, err)
-
-		// 连接错误，切换到下一个节点
-		rule.mu.Lock()
-		rule.Targets = append(rule.Targets[1:], rule.Targets[0]) // 将当前节点移动到列表末尾
-		rule.mu.Unlock()
-
-		go updateBestTarget(rule) // 重新选择最佳节点
-
 		return
 	}
 	defer destination.Close() // 确保目标连接也关闭
@@ -810,20 +857,18 @@ func handleConnection(source net.Conn, rule *ForwardRule) {
 	// 使用 32KB 的缓冲区
 	buf := make([]byte, 32*1024)
 
-	// 使用 io.Copy 进行双向数据传输, 并记录流量
+	// 使用 io.Copy 进行双向数据传输
 	go func() {
-		written, err := io.CopyBuffer(destination, source, buf)
+		_, err := io.CopyBuffer(destination, source, buf)
 		if err != nil {
 			log.Printf("Error copying data from source to target: %v", err)
 		}
-		atomic.AddInt64(&rule.Traffic, written) // 原子操作更新流量统计
 	}()
 
-	written, err := io.CopyBuffer(source, destination, buf)
+	_, err = io.CopyBuffer(source, destination, buf)
 	if err != nil {
 		log.Printf("Error copying data from target to source: %v", err)
 	}
-	atomic.AddInt64(&rule.Traffic, written) // 原子操作更新流量统计
 }
 
 func displayMonitoringPanel() {
@@ -876,12 +921,12 @@ func displayMonitoringPanel() {
 		fmt.Println("----------------------------------------------------------------------")
 
 		// 输出表头，使用固定宽度和左对齐
-		fmt.Printf("%-4s %-6s %-12s %-10s  %-8s  %-10s\n", "数据中心", "代理端口", "城市", "IP地址", "端口", "用量") // 添加用量列
+		fmt.Printf("%-4s %-6s %-25s %-10s  %-2s\n", "数据中心", "代理端口", "城市", "IP地址", "端口")
 		fmt.Println("----------------------------------------------------------------------")
 
-		maxDatacenterWidth := 4 // 数据中心最大宽度
+		maxDatacenterWidth := 6 // 数据中心最大宽度
 		maxSourcePortWidth := 6 // 代理端口最大宽度
-		maxCityWidth := 12      // 城市最大宽度
+		maxCityWidth := 35      // 城市最大宽度
 		maxIPWidth := 15        // IP 地址最大宽度
 		maxTargetPortWidth := 5 // 端口最大宽度
 
@@ -900,7 +945,7 @@ func displayMonitoringPanel() {
 						sourcePortStr = sourcePortStr[:maxSourcePortWidth-1] + "…"
 					}
 
-					city := loc.City
+					city := loc.Region + " - " + loc.City
 					if len(city) > maxCityWidth {
 						city = city[:maxCityWidth-1] + "…"
 					}
@@ -915,17 +960,13 @@ func displayMonitoringPanel() {
 						targetPortStr = targetPortStr[:maxTargetPortWidth-1] + "…"
 					}
 
-					// 显示用量信息
-					trafficStr := formatTraffic(rule.Traffic)
-
 					// 使用固定宽度和左对齐输出每一行
-					fmt.Printf("  %-6s  %-6s  %-12s %-16s  %-5s  %12s\n",
+					fmt.Printf(" %-6s %-6s %-15s %-25s %-5s\n",
 						datacenter,
 						sourcePortStr,
-						city,
-						ip,
 						targetPortStr,
-						trafficStr) // 添加用量信息
+						ip,
+						city)
 				} else {
 					// 使用固定宽度和左对齐输出每一行，城市显示为“未知”, 并截断数据
 					datacenter := rule.bestTarget.Datacenter
@@ -948,16 +989,12 @@ func displayMonitoringPanel() {
 						targetPortStr = targetPortStr[:maxTargetPortWidth-1] + "…"
 					}
 
-					// 显示用量信息
-					trafficStr := formatTraffic(rule.Traffic)
-
-					fmt.Printf("  %-6s  %-6s  %-12s %-16s  %-5s  %12s\n",
+					fmt.Printf(" %-6s %-6s %-15s %-25s %-5s\n",
 						datacenter,
 						sourcePortStr,
-						"未知",
-						ip,
 						targetPortStr,
-						trafficStr) // 添加用量信息
+						ip,
+						"未知")
 				}
 			}
 		}
@@ -972,28 +1009,6 @@ func displayMonitoringPanel() {
 		fmt.Println("----------------------------------------------------------------------")
 		fmt.Printf("运行时长: %s\t\t当前时间: %s\n", elapsedStr, currentTime)
 		fmt.Println("----------------------------------------------------------------------")
-	}
-}
-
-// 格式化流量
-func formatTraffic(bytes int64) string {
-	const (
-		KB = 1024
-		MB = 1024 * KB
-		GB = 1024 * MB
-		TB = 1024 * GB
-	)
-
-	if bytes < KB {
-		return fmt.Sprintf("%d B ", bytes)
-	} else if bytes < MB {
-		return fmt.Sprintf("%.1f KB", float64(bytes)/KB)
-	} else if bytes < GB {
-		return fmt.Sprintf("%.1f MB", float64(bytes)/MB)
-	} else if bytes < TB {
-		return fmt.Sprintf("%.2f GB", float64(bytes)/GB)
-	} else {
-		return fmt.Sprintf("%.3f TB", float64(bytes)/TB)
 	}
 }
 
