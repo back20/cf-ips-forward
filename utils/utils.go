@@ -301,7 +301,7 @@ func checkDataCenterCoco(line string, port string, icon string) string {
 	loc, ok := locationMap[colo]
 	if ok {
 		// fmt.Print(".")
-		return parts[0] + "#" + icon + loc.Cca2 + " - " + loc.City
+		return parts[0] + "#" + icon + " [" + parts[0] + "] " + loc.Cca2 + " - " + loc.City
 	}
 	// fmt.Print("x")
 	return line
