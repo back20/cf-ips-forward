@@ -151,6 +151,7 @@ func UuDownmain(sTeam []string) {
 func processLinesUrls() []string {
 
 	urls := []string{
+		"https://192.168.0.98/addapi.txt",
 		"https://addressesapi.090227.xyz/ct",
 		"https://addressesapi.090227.xyz/cmcc",
 		"https://addressesapi.090227.xyz/cmcc-ipv6",
@@ -230,10 +231,13 @@ func fetchData(url string, ch chan<- string, wg *sync.WaitGroup) {
 	lines := strings.Split(string(body), "\n")
 	for _, line := range lines {
 		if line != "" {
-
-			formattedResult := checkDataCenterCoco(line, "443", "") // Assuming port 80
-			ch <- formattedResult
-
+			if url == "https://192.168.0.98/addapi.txt" {
+				formattedResult := checkDataCenterCoco(line, "443", "优☘️") // Assuming port 80
+				ch <- formattedResult
+			} else {
+				formattedResult := checkDataCenterCoco(line, "443", "") // Assuming port 80
+				ch <- formattedResult
+			}
 			// ch <- line // Send each line to the channel
 		}
 	}
