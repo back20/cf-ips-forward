@@ -232,7 +232,7 @@ func fetchData(url string, ch chan<- string, wg *sync.WaitGroup) {
 	for _, line := range lines {
 		if line != "" {
 			if url == "https://192.168.0.98/addapi.txt" {
-				formattedResult := checkDataCenterCoco(line, "443", "优☘️") // Assuming port 80
+				formattedResult := checkDataCenterCoco(line, "443", "速☘️") // Assuming port 80
 				ch <- formattedResult
 			} else {
 				formattedResult := checkDataCenterCoco(line, "443", "") // Assuming port 80
