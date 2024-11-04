@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -215,7 +216,13 @@ func processLinesConcurrently(lines []string) []string {
 // Function to fetch data from a URL with a wait group to synchronize
 func fetchData(url string, ch chan<- string, wg *sync.WaitGroup) {
 	defer wg.Done()
-	resp, err := http.Get(url)
+
+	// 忽略证书错误
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	resp, err := client.Get(url)
 	if err != nil {
 		fmt.Printf("Error fetching data from %s: %v\n", url, err)
 		return
