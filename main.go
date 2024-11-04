@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"cf-ips-forward/utils"
 	"encoding/csv"
 	"encoding/json"
 	"flag"
@@ -461,12 +462,13 @@ func runSpeedTestAndSaveResults(outFile string) {
 	saveResultsToFile(results, outFile)
 
 	// 保存结果到txt文件
-	saveResultsToTextApi(results, "addapi.txt")
+	saveResultsToTextApi(results)
 
 	fmt.Println("测速完成，结果已保存到", outFile)
 }
 
 func main() {
+
 	flag.Parse()
 	osType := runtime.GOOS
 	if osType == "linux" {
@@ -588,16 +590,7 @@ func main() {
 }
 
 // 保存结果到文件的函数
-func saveResultsToTextApi(results []result, outFile string) {
-	file, err := os.Create(outFile)
-	if err != nil {
-		fmt.Printf("无法创建文件: %v\n", err)
-		return
-	}
-	defer file.Close()
-
-	// writer := csv.NewWriter(file)
-	writer := bufio.NewWriter(file)
+func saveResultsToTextApi(results []result) {
 
 	// 使用map存储每个数据中心的延迟结果，用于后续筛选
 	coloResults := make(map[string][]result)
@@ -614,6 +607,8 @@ func saveResultsToTextApi(results []result, outFile string) {
 		}
 	}
 
+	var sTeam []string
+
 	// 遍历每个数据中心的的结果，并筛选出前topDD个延迟最低的IP
 	for _, results := range coloResults {
 		sort.Slice(results, func(i, j int) bool {
@@ -627,15 +622,51 @@ func saveResultsToTextApi(results []result, outFile string) {
 		for _, res := range results {
 			// writer.Write([]string{res.ip, strconv.Itoa(res.ports[0]), strconv.FormatBool(*enableTLS), res.dataCenter, res.region, res.city, res.latency})
 			t := res.ip + "#优选" + res.dataCenter + "🍀☘️ " + res.region + "-" + res.city
-			// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
-			_, err := writer.WriteString(t + "\n") // 每个 IP 地址换行
-			if err != nil {
-				log.Fatalf("Failed to write IP to file: %v", err)
-			}
+			sTeam = append(sTeam, t)
 		}
 	}
 
-	writer.Flush()
+	// 拼接本次生成的结果,调用 utils 包进行加载url和优选文件文件生成
+	utils.UuDownmain(sTeam)
+
+	if runtime.GOOS == "windows" { // 如果是 Windows 系统，则需要按下 回车键 或 Ctrl+C 退出（避免通过双击运行时，测速完毕后直接关闭）
+		err := copyFile("output.txt", "X:/output.txt")
+		if err != nil {
+			fmt.Println("Error copying file:", err)
+		} else {
+			fmt.Println("File copied successfully!")
+		}
+	}
+}
+
+func copyFile(src, dst string) error {
+	// Open the source file for reading
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer sourceFile.Close()
+
+	// Create the destination file
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer destFile.Close()
+
+	// Copy the contents from source to destination
+	_, err = io.Copy(destFile, sourceFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy contents: %w", err)
+	}
+
+	// Flush any buffered data to disk for the destination file
+	err = destFile.Sync()
+	if err != nil {
+		return fmt.Errorf("failed to flush contents to disk: %w", err)
+	}
+
+	return nil
 }
 
 // 保存结果到文件的函数

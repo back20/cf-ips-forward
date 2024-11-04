@@ -2,6 +2,9 @@
 
 **Go-IPs-Forward** 是一款使用 Golang 编写的强大工具，用于测试 Cloudflare CDN 的 IP 地址延迟，并根据测速结果自动选择最佳 IP，为每个 Cloudflare 数据中心启动本地代理，将流量转发到最佳 IP。
 
+添加多另外的go文件,需要在工程中执行
+go: to add module requirements and sums:      
+        go mod tidy
 
 ip.txt 来源于使用https://github.com/cmliu/CFnat-Windows-GUI中的生成ip缓存的缓存信息
 
