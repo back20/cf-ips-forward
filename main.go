@@ -789,14 +789,6 @@ func handleConnection(source net.Conn, rule *ForwardRule) {
 	destination, err := net.DialTimeout("tcp", targetAddress, 5*time.Second)
 	if err != nil {
 		log.Printf("Error connecting to target %s: %v", targetAddress, err)
-
-		// 连接错误，切换到下一个节点
-		rule.mu.Lock()
-		rule.Targets = append(rule.Targets[1:], rule.Targets[0]) // 将当前节点移动到列表末尾
-		rule.mu.Unlock()
-
-		go updateBestTarget(rule) // 重新选择最佳节点
-
 		return
 	}
 	defer destination.Close() // 确保目标连接也关闭
