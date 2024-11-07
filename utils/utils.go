@@ -129,7 +129,7 @@ func UuDownmain(sTeam []string) {
 	writer := bufio.NewWriter(file)
 
 	// 写入表头作为一行字符串
-	header := "104.17.0.0#☘️IPV4默认能用\n2606:4700::#☘️IPV6默认能用\n"
+	header := "104.17.0.0#☘️IPV4默认能用\n[2606:4700::]#☘️IPV6默认能用\n"
 	_, err = writer.WriteString(header)
 	if err != nil {
 		log.Fatalf("Failed to write header to file: %v", err)

@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -79,6 +80,7 @@ type ForwardRule struct {
 	Targets    []Target
 	mu         sync.RWMutex
 	bestTarget *Target
+	Traffic    int64 // 用于存储该数据中心的累计流量
 }
 
 type Target struct {
@@ -888,18 +890,20 @@ func handleConnection(source net.Conn, rule *ForwardRule) {
 	// 使用 32KB 的缓冲区
 	buf := make([]byte, 32*1024)
 
-	// 使用 io.Copy 进行双向数据传输
+	// 使用 io.Copy 进行双向数据传输, 并记录流量
 	go func() {
-		_, err := io.CopyBuffer(destination, source, buf)
+		written, err := io.CopyBuffer(destination, source, buf)
 		if err != nil {
 			log.Printf("Error copying data from source to target: %v", err)
 		}
+		atomic.AddInt64(&rule.Traffic, written) // 原子操作更新流量统计
 	}()
 
-	_, err = io.CopyBuffer(source, destination, buf)
+	written, err := io.CopyBuffer(source, destination, buf)
 	if err != nil {
 		log.Printf("Error copying data from target to source: %v", err)
 	}
+	atomic.AddInt64(&rule.Traffic, written) // 原子操作更新流量统计
 }
 
 func displayMonitoringPanel() {
@@ -952,7 +956,7 @@ func displayMonitoringPanel() {
 		fmt.Println("----------------------------------------------------------------------")
 
 		// 输出表头，使用固定宽度和左对齐
-		fmt.Printf("%-4s %-6s %-25s %-10s  %-2s\n", "数据中心", "代理端口", "城市", "IP地址", "端口")
+		fmt.Printf("%-4s %-6s %-25s %-10s  %-2s  %-10s\n", "数据中心", "代理端口", "城市", "IP地址", "端口", "用量") // 添加用量列
 		fmt.Println("----------------------------------------------------------------------")
 
 		maxDatacenterWidth := 6 // 数据中心最大宽度
@@ -991,13 +995,16 @@ func displayMonitoringPanel() {
 						targetPortStr = targetPortStr[:maxTargetPortWidth-1] + "…"
 					}
 
+					// 显示用量信息
+					trafficStr := formatTraffic(rule.Traffic)
 					// 使用固定宽度和左对齐输出每一行
-					fmt.Printf(" %-6s %-6s %-15s %-25s %-5s\n",
+					fmt.Printf(" %-6s %-6s %-15s %-25s %-5s  %12s\n",
 						datacenter,
 						sourcePortStr,
 						targetPortStr,
 						ip,
-						city)
+						city,
+						trafficStr) // 添加用量信息
 				} else {
 					// 使用固定宽度和左对齐输出每一行，城市显示为“未知”, 并截断数据
 					datacenter := rule.bestTarget.Datacenter
@@ -1020,12 +1027,15 @@ func displayMonitoringPanel() {
 						targetPortStr = targetPortStr[:maxTargetPortWidth-1] + "…"
 					}
 
-					fmt.Printf(" %-6s %-6s %-15s %-25s %-5s\n",
+					// 显示用量信息
+					trafficStr := formatTraffic(rule.Traffic)
+					fmt.Printf(" %-6s %-6s %-15s %-25s %-5s  %12s\n",
 						datacenter,
 						sourcePortStr,
 						targetPortStr,
 						ip,
-						"未知")
+						"未知",
+						trafficStr) // 添加用量信息
 				}
 			}
 		}
@@ -1040,6 +1050,28 @@ func displayMonitoringPanel() {
 		fmt.Println("----------------------------------------------------------------------")
 		fmt.Printf("运行时长: %s\t\t当前时间: %s\n", elapsedStr, currentTime)
 		fmt.Println("----------------------------------------------------------------------")
+	}
+}
+
+// 格式化流量
+func formatTraffic(bytes int64) string {
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+		TB = 1024 * GB
+	)
+
+	if bytes < KB {
+		return fmt.Sprintf("%d B ", bytes)
+	} else if bytes < MB {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/KB)
+	} else if bytes < GB {
+		return fmt.Sprintf("%.1f MB", float64(bytes)/MB)
+	} else if bytes < TB {
+		return fmt.Sprintf("%.2f GB", float64(bytes)/GB)
+	} else {
+		return fmt.Sprintf("%.3f TB", float64(bytes)/TB)
 	}
 }
 
