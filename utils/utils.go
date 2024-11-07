@@ -222,6 +222,9 @@ func processLinesConcurrently(lines []string) []string {
 
 // Function to fetch data from a URL with a wait group to synchronize
 func fetchData(url string, ch chan<- string, wg *sync.WaitGroup) {
+
+	fmt.Printf("开始处理远程地址 %s 下载线程\n", url)
+
 	defer wg.Done()
 
 	// 忽略证书错误
@@ -308,7 +311,7 @@ func checkDataCenterCoco(line string, port string, icon string) string {
 	loc, ok := locationMap[colo]
 	if ok {
 		// fmt.Print(".")
-		return parts[0] + "#" + icon + loc.Cca2 + " - " + loc.City + " [" + parts[0] + "]"
+		return parts[0] + "#" + loc.Cca2 + " - " + loc.City + " [" + parts[0] + "]" + icon
 	}
 	// fmt.Print("x")
 	return line
