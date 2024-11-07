@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/cloudsoda/go-smb2"
 )
 
 const (
@@ -315,4 +317,52 @@ func checkDataCenterCoco(line string, port string, icon string) string {
 	}
 	// fmt.Print("x")
 	return line
+}
+
+func CopyFileSmb() {
+	// 设置SMB连接参数
+	d := &smb2.Dialer{
+		Initiator: &smb2.NTLMInitiator{
+			User:     "yousheng",     // SMB用户名
+			Password: "hySheng0501.", // SMB密码
+		},
+	}
+
+	// 连接到SMB服务器
+	s, err := d.Dial(context.Background(), "192.168.0.98:445")
+	if err != nil {
+		panic(err)
+	}
+	defer s.Logoff()
+
+	// 挂载共享文件夹
+	fs, err := s.Mount("web")
+	if err != nil {
+		panic(err)
+	}
+	defer fs.Umount()
+
+	// 打开本地文件
+	localFilePath := "output.txt" // 替换为本地文件路径
+	localFile, err := os.Open(localFilePath)
+	if err != nil {
+		panic(err)
+	}
+	defer localFile.Close()
+
+	// 在共享目录中创建文件
+	remoteFilePath := "cf-ips/cf-ips.txt" // 替换为共享文件夹中的目标文件路径
+	remoteFile, err := fs.Create(remoteFilePath)
+	if err != nil {
+		panic(err)
+	}
+	defer remoteFile.Close()
+
+	// 将本地文件内容复制到共享文件夹中的文件
+	_, err = io.Copy(remoteFile, localFile)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("文件已成功传输到共享文件夹！")
 }

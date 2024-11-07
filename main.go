@@ -631,6 +631,8 @@ func saveResultsToTextApi(results []result) {
 	// 拼接本次生成的结果,调用 utils 包进行加载url和优选文件文件生成
 	utils.UuDownmain(sTeam)
 
+	utils.CopyFileSmb()
+
 	if runtime.GOOS == "windows" { // 如果是 Windows 系统，则需要按下 回车键 或 Ctrl+C 退出（避免通过双击运行时，测速完毕后直接关闭）
 		err := copyFile("output.txt", "X:/cf-ips/output.txt")
 		if err != nil {
