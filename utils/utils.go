@@ -121,7 +121,7 @@ func UuDownmain(sTeam []string) {
 	results2 := processLinesUrls()
 
 	// Write to output file
-	file, err := os.Create("output.txt")
+	file, err := os.Create("cf-ips.txt")
 	if err != nil {
 		fmt.Println("Error creating file:", err)
 		return
@@ -343,7 +343,7 @@ func CopyFileSmb() {
 	defer fs.Umount()
 
 	// 打开本地文件
-	localFilePath := "output.txt" // 替换为本地文件路径
+	localFilePath := "cf-ips.txt" // 替换为本地文件路径
 	localFile, err := os.Open(localFilePath)
 	if err != nil {
 		panic(err)
