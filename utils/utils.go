@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -12,7 +13,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -120,6 +123,9 @@ func UuDownmain(sTeam []string) {
 
 	results2 := processLinesUrls()
 
+	// 处理本地优选的日志
+	results3 := processLocLog()
+
 	// Write to output file
 	file, err := os.Create("cf-ips.txt")
 	if err != nil {
@@ -135,6 +141,14 @@ func UuDownmain(sTeam []string) {
 	_, err = writer.WriteString(header)
 	if err != nil {
 		log.Fatalf("Failed to write header to file: %v", err)
+	}
+
+	for _, res := range results3 {
+		// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
+		_, err := writer.WriteString(res + "\n") // 每个 IP 地址换行
+		if err != nil {
+			log.Fatalf("Failed to write IP to file: %v", err)
+		}
 	}
 
 	for _, res := range results {
@@ -365,4 +379,124 @@ func CopyFileSmb() {
 	}
 
 	fmt.Println("文件已成功传输到共享文件夹！")
+}
+
+const blockSize = 4096 // 每次读取的块大小（可以根据文件大小调整）
+
+func processLocLog() []string {
+	var logdir string // 先声明变量
+
+	osType := runtime.GOOS
+	if osType == "linux" {
+		logdir = "/mnt/pve/nvme/public/cfnat/logs" // 给 logdir 赋值
+	} else {
+		logdir = "./logs" // 给 logdir 赋值
+	}
+
+	// Collect results from the channel into a slice
+	var results []string
+
+	// return results
+
+	// 获取目录下所有的文件
+	files, err := filepath.Glob(filepath.Join(logdir, "*"))
+	if err != nil {
+		fmt.Println("Error listing files:", err)
+		return results
+	}
+
+	// 遍历目录下的文件
+	for _, logFile := range files {
+
+		// 打开日志文件
+		file, err := os.Open(logFile)
+		if err != nil {
+			fmt.Println("Error opening file:", err)
+			return results
+		}
+		defer file.Close()
+
+		// 获取文件大小
+		stat, err := file.Stat()
+		if err != nil {
+			fmt.Println("Error getting file info:", err)
+			return results
+		}
+		fileSize := stat.Size()
+
+		// 正则表达式匹配 "选择最佳连接: 地址: [IPv6]:port 延迟: XX ms" 的格式
+		re := regexp.MustCompile(`选择最佳连接: 地址: \[([a-fA-F0-9:]+)\]:\d+ 延迟: \d+ ms`)
+
+		var lastMatch string
+		buffer := make([]byte, blockSize)
+		remaining := []byte{}
+
+		// 从文件末尾向前读取块
+		for offset := fileSize; offset > 0; {
+			// 计算本次读取的块大小
+			if offset < blockSize {
+				buffer = make([]byte, offset)
+			}
+			offset -= int64(len(buffer))
+
+			// 设置文件指针位置并读取块
+			_, err := file.Seek(offset, 0)
+			if err != nil {
+				fmt.Println("Error seeking file:", err)
+				return results
+			}
+			_, err = file.Read(buffer)
+			if err != nil {
+				fmt.Println("Error reading file:", err)
+				return results
+			}
+
+			// 把当前块和剩余的字节拼接，然后按行分割
+			chunk := append(buffer, remaining...)
+			lines := bytes.Split(chunk, []byte("\n"))
+
+			// 记录最前面不完整的行（在下一次块中处理）
+			remaining = lines[0]
+			lines = lines[1:]
+
+			// 倒序遍历当前块中的行
+			for i := len(lines) - 1; i >= 0; i-- {
+				line := string(lines[i])
+				// 查找匹配的 IPv6 地址
+				match := re.FindStringSubmatch(line)
+				if len(match) > 1 {
+					lastMatch = match[1]
+					break // 找到最后一个匹配后立即停止
+				}
+			}
+
+			if lastMatch != "" {
+				break // 找到匹配后停止进一步读取块
+			}
+		}
+
+		// 输出最后匹配的 IPv6 地址
+		if lastMatch != "" {
+			fmt.Println("最后出现的IPv6地址:", lastMatch)
+		} else {
+			fmt.Println("未找到符合条件的IPv6地址")
+		}
+
+		// 获取文件的基本名称（包括扩展名）
+		fileName := filepath.Base(logFile)
+
+		// 去掉扩展名
+		dataCenter := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+		fmt.Printf("发现有效文件名 %s", dataCenter)
+
+		loc, ok := locationMap[strings.ToUpper(dataCenter)]
+		if ok {
+			fmt.Printf("发现有效IP %s", loc.City)
+			results = append(results, "["+lastMatch+"]#"+loc.Cca2+" - "+loc.City+" 乐冰 家优选")
+			// fmt.Printf("发现有效IP %s 端口 %d 位置信息 %s 延迟 %d 毫秒\n", ip, port, loc.City, tcpDuration.Milliseconds()) // 添加端口信息
+			// resultChan <- result{ip, []int{port}, dataCenter, loc.Region, loc.City, fmt.Sprintf("%d", tcpDuration.Milliseconds()), tcpDuration}
+		}
+	}
+
+	return results
 }

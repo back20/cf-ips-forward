@@ -469,6 +469,21 @@ func runSpeedTestAndSaveResults(outFile string) {
 	fmt.Println("测速完成，结果已保存到", outFile)
 }
 
+// 使用正则表达式从文件名中提取 IP 地址
+func extractIP(fileName string) (string, error) {
+	// 正则表达式：假设文件名中的 IP 地址以类似 "192.168.0.1" 的格式出现
+	// re := regexp.MustCompile(`([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)`)
+
+	// 正则表达式匹配 "选择最佳连接: 地址: [IPv6]:port 延迟: XX ms" 的格式
+	re := regexp.MustCompile(`选择最佳连接: 地址: \[([a-fA-F0-9:]+)\]:\d+ 延迟: \d+ ms`)
+
+	matches := re.FindStringSubmatch(fileName)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("no IP address found in file name")
+	}
+	return matches[1], nil
+}
+
 func main() {
 
 	flag.Parse()
