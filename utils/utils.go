@@ -384,6 +384,9 @@ func CopyFileSmb() {
 const blockSize = 4096 // 每次读取的块大小（可以根据文件大小调整）
 
 func processLocLog() []string {
+
+	ipv6 := getIpv6()
+
 	var logdir string // 先声明变量
 
 	osType := runtime.GOOS
@@ -425,7 +428,8 @@ func processLocLog() []string {
 		fileSize := stat.Size()
 
 		// 正则表达式匹配 "选择最佳连接: 地址: [IPv6]:port 延迟: XX ms" 的格式
-		re := regexp.MustCompile(`选择最佳连接: 地址: \[([a-fA-F0-9:]+)\]:\d+ 延迟: \d+ ms`)
+		// re := regexp.MustCompile(`选择最佳连接: 地址: \[([a-fA-F0-9:]+)\]:\d+ 延迟: \d+ ms`)
+		re := regexp.MustCompile(`选择最佳连接: 地址: \[?([a-fA-F0-9:.]+)\]?:\d+ 延迟: \d+ ms`)
 
 		var lastMatch string
 		buffer := make([]byte, blockSize)
@@ -465,6 +469,9 @@ func processLocLog() []string {
 				// 查找匹配的 IPv6 地址
 				match := re.FindStringSubmatch(line)
 				if len(match) > 1 {
+					if match[1] == "127.0.0.1" {
+						continue
+					}
 					lastMatch = match[1]
 					break // 找到最后一个匹配后立即停止
 				}
@@ -492,11 +499,66 @@ func processLocLog() []string {
 		loc, ok := locationMap[strings.ToUpper(dataCenter)]
 		if ok {
 			fmt.Printf("发现有效IP %s", loc.City)
-			results = append(results, "["+lastMatch+"]#"+loc.Cca2+" - "+loc.City+" 乐冰 家优选")
+			if strings.Contains(lastMatch, ":") {
+				results = append(results, "["+lastMatch+"]#"+loc.Cca2+" - "+loc.City+" 实时优选")
+			} else {
+				results = append(results, ""+lastMatch+"#"+loc.Cca2+" - "+loc.City+" 实时优选")
+			}
+			results = append(results, "["+ipv6+"]#"+loc.Cca2+" - "+loc.City+" 乐冰家流量代理")
 			// fmt.Printf("发现有效IP %s 端口 %d 位置信息 %s 延迟 %d 毫秒\n", ip, port, loc.City, tcpDuration.Milliseconds()) // 添加端口信息
 			// resultChan <- result{ip, []int{port}, dataCenter, loc.Region, loc.City, fmt.Sprintf("%d", tcpDuration.Milliseconds()), tcpDuration}
 		}
 	}
 
 	return results
+}
+
+func getIpv6() string {
+	// 获取所有网络接口
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		fmt.Println("Error retrieving network interfaces:", err)
+		return ""
+	}
+
+	var ipv6Addresses []string
+
+	// 遍历每个网络接口
+	for _, iface := range interfaces {
+		// 获取接口上的所有地址
+		addrs, err := iface.Addrs()
+		if err != nil {
+			fmt.Printf("Error retrieving addresses for interface %s: %v\n", iface.Name, err)
+			continue
+		}
+
+		// 遍历接口的每个地址
+		for _, addr := range addrs {
+			ip, _, err := net.ParseCIDR(addr.String())
+			if err != nil {
+				fmt.Println("Error parsing address:", err)
+				continue
+			}
+
+			// 检查是否为 IPv6 地址，并排除本地地址 (::1) 和 fe80 开头的地址
+			if ip.To16() != nil && ip.To4() == nil && ip.String() != "::1" && !strings.HasPrefix(ip.String(), "fe80") {
+				ipv6Addresses = append(ipv6Addresses, ip.String())
+			}
+		}
+	}
+
+	var ipv6 string
+
+	// 输出所有非本地 IPv6 地址
+	if len(ipv6Addresses) > 0 {
+		fmt.Println("本机的 IPv6 地址:")
+		for _, v6 := range ipv6Addresses {
+			fmt.Println(v6)
+			ipv6 = v6
+			break
+		}
+	} else {
+		fmt.Println("未找到非本地的 IPv6 地址")
+	}
+	return ipv6
 }
