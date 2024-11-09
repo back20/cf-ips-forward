@@ -118,13 +118,13 @@ func UuDownmain(sTeam []string) {
 
 	readLocationData()
 
-	// 处理传递过来的值
-	results := processLinesConcurrently(sTeam)
-
-	results2 := processLinesUrls()
-
 	// 处理本地优选的日志
-	results3 := processLocLog()
+	results := processLocLog()
+
+	// 处理传递过来的值
+	results2 := processLinesConcurrently(sTeam)
+
+	results3 := processLinesUrls()
 
 	// Write to output file
 	file, err := os.Create("cf-ips.txt")
@@ -135,21 +135,6 @@ func UuDownmain(sTeam []string) {
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
-
-	// 写入表头作为一行字符串
-	header := "104.17.0.0#☘️IPV4默认能用\n[2606:4700::]#☘️IPV6默认能用\n"
-	_, err = writer.WriteString(header)
-	if err != nil {
-		log.Fatalf("Failed to write header to file: %v", err)
-	}
-
-	for _, res := range results3 {
-		// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
-		_, err := writer.WriteString(res + "\n") // 每个 IP 地址换行
-		if err != nil {
-			log.Fatalf("Failed to write IP to file: %v", err)
-		}
-	}
 
 	for _, res := range results {
 		// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
@@ -165,6 +150,21 @@ func UuDownmain(sTeam []string) {
 		if err != nil {
 			log.Fatalf("Failed to write IP to file: %v", err)
 		}
+	}
+
+	for _, res := range results3 {
+		// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
+		_, err := writer.WriteString(res + "\n") // 每个 IP 地址换行
+		if err != nil {
+			log.Fatalf("Failed to write IP to file: %v", err)
+		}
+	}
+
+	// 写入表头作为一行字符串
+	header := "104.17.0.0#☘️IPV4默认能用\n[2606:4700::]#☘️IPV6默认能用\n"
+	_, err = writer.WriteString(header)
+	if err != nil {
+		log.Fatalf("Failed to write header to file: %v", err)
 	}
 
 	writer.Flush()
@@ -327,7 +327,7 @@ func checkDataCenterCoco(line string, port string, icon string) string {
 	loc, ok := locationMap[colo]
 	if ok {
 		// fmt.Print(".")
-		return parts[0] + "#" + loc.Cca2 + " - " + loc.City + " [" + parts[0] + "]" + icon
+		return parts[0] + "#" + loc.Cca2 + "-" + loc.City + "[" + parts[0] + "]" + icon
 	}
 	// fmt.Print("x")
 	return line
@@ -385,8 +385,6 @@ const blockSize = 4096 // 每次读取的块大小（可以根据文件大小调
 
 func processLocLog() []string {
 
-	ipv6 := getIpv6()
-
 	var logdir string // 先声明变量
 
 	osType := runtime.GOOS
@@ -431,7 +429,12 @@ func processLocLog() []string {
 		// re := regexp.MustCompile(`选择最佳连接: 地址: \[([a-fA-F0-9:]+)\]:\d+ 延迟: \d+ ms`)
 		re := regexp.MustCompile(`选择最佳连接: 地址: \[?([a-fA-F0-9:.]+)\]?:\d+ 延迟: \d+ ms`)
 
+		// 正则表达式匹配 "开始状态检查，目标地址: 127.0.0.1:1234" 的格式
+		// statusCheckRE := regexp.MustCompile(`开始状态检查，目标地址: ([a-fA-F0-9:.]+):(\d+)`)
+		postRe := regexp.MustCompile(`开始状态检查，目标地址: 127\.0\.0\.1:(\d+)`)
+
 		var lastMatch string
+		var lastPort string
 		buffer := make([]byte, blockSize)
 		remaining := []byte{}
 
@@ -466,10 +469,20 @@ func processLocLog() []string {
 			// 倒序遍历当前块中的行
 			for i := len(lines) - 1; i >= 0; i-- {
 				line := string(lines[i])
-				// 查找匹配的 IPv6 地址
+
+				// 先核查端口
+				statusCheckMatch := postRe.FindStringSubmatch(line)
+				if len(statusCheckMatch) > 1 {
+					lastPort = statusCheckMatch[1]
+				}
+
+				// 查找匹配的地址,如果地址找到,但端口未找到继续找
 				match := re.FindStringSubmatch(line)
 				if len(match) > 1 {
 					if match[1] == "127.0.0.1" {
+						continue
+					}
+					if lastPort == "" {
 						continue
 					}
 					lastMatch = match[1]
@@ -482,7 +495,7 @@ func processLocLog() []string {
 			}
 		}
 
-		// 输出最后匹配的 IPv6 地址
+		// 输出最后匹配的地址
 		if lastMatch != "" {
 			fmt.Println("最后出现的IPv6地址:", lastMatch)
 		} else {
@@ -500,11 +513,11 @@ func processLocLog() []string {
 		if ok {
 			fmt.Printf("发现有效IP %s", loc.City)
 			if strings.Contains(lastMatch, ":") {
-				results = append(results, "["+lastMatch+"]#"+loc.Cca2+" - "+loc.City+" 实时优选")
+				results = append(results, "["+lastMatch+"]#"+loc.Cca2+"-"+loc.City+" ☘️")
 			} else {
-				results = append(results, ""+lastMatch+"#"+loc.Cca2+" - "+loc.City+" 实时优选")
+				results = append(results, ""+lastMatch+"#"+loc.Cca2+"-"+loc.City+" ☘️")
 			}
-			results = append(results, "["+ipv6+"]#"+loc.Cca2+" - "+loc.City+" 乐冰家流量代理")
+			results = append(results, "1q502u2312.zicp.fun:"+lastPort+"#"+loc.Cca2+"-"+loc.City+" 乐冰家跳板")
 			// fmt.Printf("发现有效IP %s 端口 %d 位置信息 %s 延迟 %d 毫秒\n", ip, port, loc.City, tcpDuration.Milliseconds()) // 添加端口信息
 			// resultChan <- result{ip, []int{port}, dataCenter, loc.Region, loc.City, fmt.Sprintf("%d", tcpDuration.Milliseconds()), tcpDuration}
 		}
