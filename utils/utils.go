@@ -136,6 +136,12 @@ func UuDownmain(sTeam []string) {
 
 	writer := bufio.NewWriter(file)
 
+	// results = append(results, "")
+	_, err = writer.WriteString("1q502u2312.zicp.fun:1235#GB-伦敦☘️跳板机,订阅更新\n")
+	if err != nil {
+		log.Fatalf("Failed to write header to file: %v", err)
+	}
+
 	for _, res := range results {
 		// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
 		_, err := writer.WriteString(res + "\n") // 每个 IP 地址换行
@@ -513,11 +519,10 @@ func processLocLog() []string {
 		if ok {
 			fmt.Printf("发现有效IP %s", loc.City)
 			if strings.Contains(lastMatch, ":") {
-				results = append(results, "["+lastMatch+"]#"+loc.Cca2+"-"+loc.City+" ☘️")
+				results = append(results, "["+lastMatch+"]#"+loc.Cca2+"-"+loc.City+"["+lastMatch+"]☘️")
 			} else {
-				results = append(results, ""+lastMatch+"#"+loc.Cca2+"-"+loc.City+" ☘️")
+				results = append(results, ""+lastMatch+"#"+loc.Cca2+"-"+loc.City+"["+lastMatch+"]☘️")
 			}
-			results = append(results, "1q502u2312.zicp.fun:"+lastPort+"#"+loc.Cca2+"-"+loc.City+" 乐冰家跳板")
 			// fmt.Printf("发现有效IP %s 端口 %d 位置信息 %s 延迟 %d 毫秒\n", ip, port, loc.City, tcpDuration.Milliseconds()) // 添加端口信息
 			// resultChan <- result{ip, []int{port}, dataCenter, loc.Region, loc.City, fmt.Sprintf("%d", tcpDuration.Milliseconds()), tcpDuration}
 		}
