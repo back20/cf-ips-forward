@@ -153,7 +153,9 @@ func filterByLocationWithLimit(records []string, defaultLimit int) []string {
 
 	for _, idx := range indices {
 		record := records[idx]
-
+		if record == "" {
+			continue
+		}
 		tempStr := strings.ReplaceAll(record, "速☘️", "")
 		tempStr = strings.ReplaceAll(tempStr, "☘️", "")
 		location := "#" + strings.Split(tempStr, "#")[1]
@@ -204,7 +206,7 @@ func UuDownmain(sTeam []string) {
 	writer := bufio.NewWriter(file)
 
 	// results = append(results, "")
-	_, err = writer.WriteString("1q502u2312.zicp.fun:1235#GB-伦敦☘️跳板机(更新用)\n")
+	_, err = writer.WriteString("1q502u2312.zicp.fun:1236#GB-圣何塞☘️跳板机(更新用)\n1q502u2312.zicp.fun:1235#GB-伦敦☘️跳板机(更新用)\n")
 	if err != nil {
 		log.Fatalf("Failed to write header to file: %v", err)
 	}
