@@ -10,12 +10,14 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -114,6 +116,58 @@ func readLocationData() {
 	}
 }
 
+// Remove duplicates from the slice
+func removeDuplicates(records []string) []string {
+	uniqueMap := make(map[string]bool)
+	var uniqueRecords []string
+
+	for _, record := range records {
+		if !uniqueMap[record] {
+			uniqueMap[record] = true
+			uniqueRecords = append(uniqueRecords, record)
+		}
+	}
+	return uniqueRecords
+}
+
+// Filter records by a default limit per location
+func filterByLocationWithLimit(records []string, defaultLimit int) []string {
+
+	// Seed the random generator
+	rand.Seed(time.Now().UnixNano())
+
+	// Create an array of indices based on the length of records
+	indices := make([]int, len(records))
+	for i := 0; i < len(records); i++ {
+		indices[i] = i
+	}
+
+	// Shuffle the indices array
+	rand.Shuffle(len(indices), func(i, j int) {
+		indices[i], indices[j] = indices[j], indices[i]
+	})
+
+	// Print records in the order of the shuffled indices
+	result := []string{}
+	locationCount := make(map[string]int)
+
+	for _, idx := range indices {
+		record := records[idx]
+
+		tempStr := strings.ReplaceAll(record, "速☘️", "")
+		tempStr = strings.ReplaceAll(tempStr, "☘️", "")
+		location := "#" + strings.Split(tempStr, "#")[1]
+
+		// Only add if the location count has not reached the default limit
+		if locationCount[location] < defaultLimit {
+			result = append(result, record)
+			locationCount[location]++
+		}
+	}
+
+	return result
+}
+
 func UuDownmain(sTeam []string) {
 
 	readLocationData()
@@ -121,10 +175,23 @@ func UuDownmain(sTeam []string) {
 	// 处理本地优选的日志
 	results := processLocLog()
 
-	// 处理传递过来的值
+	// 处理传递过来的值,和url下载得到的值
 	results2 := processLinesConcurrently(sTeam)
+	results3 := append(results2, processLinesUrls()...)
 
-	results3 := processLinesUrls()
+	// 去重
+	uniqueRecords := removeDuplicates(results3)
+
+	// Define the default limit for each location
+	defaultLimit := 4
+
+	// 每种记录取4条
+	gResult := filterByLocationWithLimit(uniqueRecords, defaultLimit)
+
+	// 排序
+	sort.Slice(gResult, func(i, j int) bool {
+		return strings.Split(gResult[i], "#")[1] < strings.Split(gResult[j], "#")[1]
+	})
 
 	// Write to output file
 	file, err := os.Create("cf-ips.txt")
@@ -137,7 +204,7 @@ func UuDownmain(sTeam []string) {
 	writer := bufio.NewWriter(file)
 
 	// results = append(results, "")
-	_, err = writer.WriteString("1q502u2312.zicp.fun:1235#GB-伦敦☘️跳板机,订阅更新\n")
+	_, err = writer.WriteString("1q502u2312.zicp.fun:1235#GB-伦敦☘️跳板机(更新用)\n")
 	if err != nil {
 		log.Fatalf("Failed to write header to file: %v", err)
 	}
@@ -150,15 +217,7 @@ func UuDownmain(sTeam []string) {
 		}
 	}
 
-	for _, res := range results2 {
-		// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
-		_, err := writer.WriteString(res + "\n") // 每个 IP 地址换行
-		if err != nil {
-			log.Fatalf("Failed to write IP to file: %v", err)
-		}
-	}
-
-	for _, res := range results3 {
+	for _, res := range gResult {
 		// t := strings.Replace(originalConfig, "127.0.0.1", ip.IP.String(), 1)
 		_, err := writer.WriteString(res + "\n") // 每个 IP 地址换行
 		if err != nil {
@@ -167,7 +226,7 @@ func UuDownmain(sTeam []string) {
 	}
 
 	// 写入表头作为一行字符串
-	header := "104.17.0.0#☘️IPV4默认能用\n[2606:4700::]#☘️IPV6默认能用\n"
+	header := "104.17.0.0#☘️IPV4默认\n[2606:4700::]#☘️IPV6默认\n"
 	_, err = writer.WriteString(header)
 	if err != nil {
 		log.Fatalf("Failed to write header to file: %v", err)
@@ -313,11 +372,11 @@ func checkDataCenterCoco(line string, port string, icon string) string {
 	resp, err := client.Do(req)
 	if err != nil {
 		// fmt.Print("x")
-		return line
+		return ""
 	}
 	if resp.StatusCode != http.StatusOK {
 		// fmt.Print("x")
-		return line
+		return ""
 	}
 
 	// 获取机场三字码，数据中心位置
@@ -330,13 +389,14 @@ func checkDataCenterCoco(line string, port string, icon string) string {
 		colo = regexp.MustCompile(`[A-Z]{3}`).FindString(str)
 	}
 
+	var retStr string
 	loc, ok := locationMap[colo]
 	if ok {
 		// fmt.Print(".")
-		return parts[0] + "#" + loc.Cca2 + "-" + loc.City + "[" + parts[0] + "]" + icon
+		retStr = parts[0] + "#" + loc.Cca2 + "-" + loc.City + icon
 	}
 	// fmt.Print("x")
-	return line
+	return retStr
 }
 
 func CopyFileSmb() {
@@ -519,9 +579,9 @@ func processLocLog() []string {
 		if ok {
 			fmt.Printf("发现有效IP %s", loc.City)
 			if strings.Contains(lastMatch, ":") {
-				results = append(results, "["+lastMatch+"]#"+loc.Cca2+"-"+loc.City+"["+lastMatch+"]☘️")
+				results = append(results, "["+lastMatch+"]#"+loc.Cca2+"-"+loc.City+"☘️")
 			} else {
-				results = append(results, ""+lastMatch+"#"+loc.Cca2+"-"+loc.City+"["+lastMatch+"]☘️")
+				results = append(results, ""+lastMatch+"#"+loc.Cca2+"-"+loc.City+"☘️")
 			}
 			// fmt.Printf("发现有效IP %s 端口 %d 位置信息 %s 延迟 %d 毫秒\n", ip, port, loc.City, tcpDuration.Milliseconds()) // 添加端口信息
 			// resultChan <- result{ip, []int{port}, dataCenter, loc.Region, loc.City, fmt.Sprintf("%d", tcpDuration.Milliseconds()), tcpDuration}
