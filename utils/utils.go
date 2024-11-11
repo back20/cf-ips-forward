@@ -206,7 +206,7 @@ func UuDownmain(sTeam []string) {
 	writer := bufio.NewWriter(file)
 
 	// results = append(results, "")
-	_, err = writer.WriteString("1q502u2312.zicp.fun:1236#GB-圣何塞☘️跳板机(更新用)\n1q502u2312.zicp.fun:1235#GB-伦敦☘️跳板机(更新用)\n")
+	_, err = writer.WriteString("1q502u2312.zicp.fun:1236#US-圣何塞☘️跳板机(更新用)\n1q502u2312.zicp.fun:1235#GB-伦敦☘️跳板机(更新用)\n")
 	if err != nil {
 		log.Fatalf("Failed to write header to file: %v", err)
 	}
@@ -423,6 +423,12 @@ func CopyFileSmb() {
 		panic(err)
 	}
 	defer fs.Umount()
+
+	// 重命名文件
+	err = fs.Rename("cf-ips/cf-ips.txt", "cf-ips/cf-ips.txt"+time.Now().Format("20060102150405"))
+	if err != nil {
+		log.Fatalf("无法重命名文件: %v", err)
+	}
 
 	// 打开本地文件
 	localFilePath := "cf-ips.txt" // 替换为本地文件路径
