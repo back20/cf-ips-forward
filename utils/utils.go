@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -170,22 +172,65 @@ func filterByLocationWithLimit(records []string, defaultLimit int) []string {
 	return result
 }
 
+// 优选的订阅地址处理
+func processLinesSubs() []string {
+
+	urls := []string{
+		"https://sub.443888.xyz/vless",
+		"https://vless.durl.nyc.mn/zrf",
+		"https://happy.1949.buzz/vless",
+	}
+
+	// results := make(map[string]bool)
+	// results := make(map[string]string) // Corrected to map[string]string
+	ch := make(chan string)
+
+	var wg sync.WaitGroup
+
+	// Start goroutines for each URL
+	for _, url := range urls {
+		wg.Add(1)
+		go fetchDataSub(url, ch, &wg)
+	}
+
+	// Close the channel when all goroutines are done
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	// Collect results from the channel into a slice
+	var results []string
+	for result := range ch {
+		results = append(results, result)
+	}
+	return results
+}
+
 func UuDownmain(sTeam []string) {
 
 	readLocationData()
 
+	sTeam2 := processLinesSubs()
+
+	sTeam3 := processLinesUrls()
+
 	// 处理本地优选的日志
 	results := processLocLog()
 
+	var mergedTeam []string
+	mergedTeam = append(mergedTeam, sTeam...)
+	mergedTeam = append(mergedTeam, sTeam2...)
+	mergedTeam = append(mergedTeam, sTeam3...)
+
 	// 处理传递过来的值,和url下载得到的值
-	results2 := processLinesConcurrently(sTeam)
-	results3 := append(results2, processLinesUrls()...)
+	results2 := processLinesConcurrently(mergedTeam)
 
 	// 去重
-	uniqueRecords := removeDuplicates(results3)
+	uniqueRecords := removeDuplicates(results2)
 
 	// Define the default limit for each location
-	defaultLimit := 4
+	defaultLimit := 8
 
 	// 每种记录取4条
 	gResult := filterByLocationWithLimit(uniqueRecords, defaultLimit)
@@ -285,7 +330,7 @@ func processLinesConcurrently(lines []string) []string {
 		wg.Add(1)
 		go func(line string) {
 			defer wg.Done()
-			result := checkDataCenterCoco(line, "443", "☘️")
+			result := checkDataCenterCoco(line, getPort(line), "")
 			ch <- result
 		}(line)
 	}
@@ -301,6 +346,109 @@ func processLinesConcurrently(lines []string) []string {
 		results = append(results, result) // Append each result to the results slice
 	}
 	return results
+}
+
+func getPort(input string) string {
+	// Split the input by the first '#' character to ignore the name part
+	parts := strings.Split(input, "#")
+	address := parts[0] // Get the part before the '#'
+
+	// Check if there's a colon in the address (i.e., the format "host:port")
+	if strings.Contains(address, ":") {
+		// Split the address by ':' to get the port
+		hostnamePort := strings.Split(address, ":")
+		return hostnamePort[1] // Return the port part
+	}
+	// If no port specified, return the default port 443
+	return "443"
+}
+
+func fetchDataSub(url string, ch chan<- string, wg *sync.WaitGroup) {
+
+	fmt.Printf("开始处理远程地址 %s 下载线程\n", url)
+
+	defer wg.Done()
+
+	// 忽略证书错误
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
+	// Make a GET request with a custom User-Agent header to mimic a browser
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return
+	}
+
+	// Set the User-Agent header to a browser-like value
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+
+	// Send the request using the client
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending request:", err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading response from %s: %v\n", url, err)
+		return
+	}
+
+	// Convert the body []byte to a string
+	bodyStr := string(body)
+	if strings.Contains(bodyStr, "://") || strings.Contains(bodyStr, "#") {
+		fmt.Println("URL or fragment found in the response body.")
+	} else {
+		// Decode the base64 string
+		decodedBytes, err := base64.StdEncoding.DecodeString(bodyStr)
+		if err != nil {
+			log.Fatalf("Error decoding base64 string: %v", err)
+		}
+
+		// Convert decoded bytes to string
+		bodyStr = string(decodedBytes)
+	}
+
+	lines := strings.Split(string(bodyStr), "\n")
+	for _, line := range lines {
+		if line != "" {
+			formattedResult := parseVless(line)
+			// formattedResult := checkDataCenterCoco(line, "443", "") // Assuming port 80
+			ch <- formattedResult
+		}
+	}
+}
+
+func parseVless(vlessURL string) string {
+	// Parse the URL
+
+	if strings.Contains(vlessURL, "://") {
+		// 其它的协议处理
+		parsedURL, err := url.Parse(vlessURL)
+		if err != nil {
+			panic(err)
+		}
+
+		// Extract the host and port
+		host := parsedURL.Hostname() // This gives the IP or domain
+		port := parsedURL.Port()     // This gives the port
+
+		// Extract the name (from the fragment after the #)
+		fragment := parsedURL.Fragment
+		// name := strings.Split(fragment, "-")[1] // Assuming the name is after the first '-'
+
+		// Format the result as "ip:port#name"
+		result := fmt.Sprintf("%s:%s#%s", host, port, fragment)
+		return result
+	}
+
+	return vlessURL
 }
 
 // Function to fetch data from a URL with a wait group to synchronize
@@ -331,24 +479,50 @@ func fetchData(url string, ch chan<- string, wg *sync.WaitGroup) {
 	lines := strings.Split(string(body), "\n")
 	for _, line := range lines {
 		if line != "" {
-			if url == "https://192.168.0.98/addapi.txt" {
-				formattedResult := checkDataCenterCoco(line, "443", "速☘️") // Assuming port 80
-				ch <- formattedResult
-			} else {
-				formattedResult := checkDataCenterCoco(line, "443", "") // Assuming port 80
-				ch <- formattedResult
-			}
+			ch <- line
+			/*
+				if url == "https://192.168.0.98/addapi.txt" {
+					formattedResult := checkDataCenterCoco(line, "443", "速☘️") // Assuming port 80
+					ch <- formattedResult
+				} else {
+					formattedResult := checkDataCenterCoco(line, "443", "") // Assuming port 80
+					ch <- formattedResult
+				}*/
 			// ch <- line // Send each line to the channel
 		}
 	}
+}
+
+func extractIP(input string) string {
+	// Check if input contains a port by looking for ":"
+	if strings.Contains(input, ":") {
+		// If it's IPv6 with square brackets (e.g., [2606:4700::]:443)
+		if strings.HasPrefix(input, "[") && strings.Contains(input, "]:") {
+			// Remove brackets and split by ":"
+			return input[1:strings.Index(input, "]")]
+		}
+		// For IPv4 (e.g., 104.19.32.12:443) or IPv6 without brackets
+		return strings.Split(input, ":")[0]
+	}
+
+	// If there's no port, return the input as is
+	return input
 }
 
 func checkDataCenterCoco(line string, port string, icon string) string {
 
 	parts := strings.Split(line, "#")
 
-	if !isIPv4(parts[0]) {
+	// 需要再进行:端口号去除
+	address := extractIP(parts[0])
+
+	if net.ParseIP(address) == nil {
+		// If not a valid IP address, return the line
 		return line
+	}
+
+	if address == "127.0.0.1" {
+		return ""
 	}
 
 	// ipv4逻辑
@@ -356,7 +530,7 @@ func checkDataCenterCoco(line string, port string, icon string) string {
 		Transport: &http.Transport{
 			// 使用 DialContext 函数
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(parts[0], port))
+				return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(address, port))
 			},
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -395,7 +569,7 @@ func checkDataCenterCoco(line string, port string, icon string) string {
 	loc, ok := locationMap[colo]
 	if ok {
 		// fmt.Print(".")
-		retStr = parts[0] + "#" + loc.Cca2 + "-" + loc.City + icon
+		retStr = address + ":" + port + "#" + loc.Cca2 + "-" + loc.City + icon
 	}
 	// fmt.Print("x")
 	return retStr
